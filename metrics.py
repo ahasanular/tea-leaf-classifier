@@ -196,7 +196,7 @@ class ModelEvaluator:
             learning_rate='auto',
             init='pca',
             random_state=self.config.SEED,
-            n_iter=1000
+            max_iter=1000
         )
 
         embeddings = tsne.fit_transform(features[:self.config.TSNE_MAX_ITEMS])
