@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
 Tea Leaf Disease Classification System
-Modular, production-ready implementation with prototype-based explainable AI
+Clean implementation: Only trains, saves models, collects analytics, saves JSON
+NO PLOTTING during main execution
 """
 
+import os
 import sys
 import torch
 import warnings
+import numpy as np
 from pathlib import Path
 
 # Add current directory to path
@@ -21,12 +24,11 @@ from dataset import DataModule
 from models import TeaLeafModel
 from trainer import PrototypeTrainer
 from metrics import ModelEvaluator
-from visualization.plots import VisualizationEngine
-from dataset import TeaLeafDataSplitter
+from utils.results_logger import TeaLeafResultsLogger
 
 
 class TeaLeafClassificationSystem:
-    """Main system class that orchestrates the entire pipeline"""
+    """Main system class - ONLY trains, saves models, collects analytics"""
 
     def __init__(self, config_class=Config):
         self.config = config_class()
@@ -34,230 +36,215 @@ class TeaLeafClassificationSystem:
         self.model = None
         self.trainer = None
         self.evaluator = None
-        self.visualizer = None
+        self.results_logger = None
 
     def setup(self):
         """Setup all components of the system"""
         print("=== Tea Leaf Disease Classification System ===")
-        self.config.print_config()
-        print("\n" + "=" * 50)
+        print(f"Device: {self.config.DEVICE}")
+        print(f"Output directory: {self.config.EXPORT_DIR}")
+
+        # Check dataset existence
+        if not Path(self.config.DATA_ROOT).exists():
+            raise FileNotFoundError(f"Dataset not found at {self.config.DATA_ROOT}")
 
         # Setup data
-        print("\n[1/5] Setting up data pipeline...")
+        print("\n[1/4] Setting up data pipeline...")
         self.data_module = DataModule(self.config)
         self.data_module.prepare_data()
 
         # Setup model
-        print("\n[2/5] Initializing model...")
+        print("[2/4] Initializing model...")
         self.model = TeaLeafModel(
             num_classes=len(self.data_module.splits['known_classes']),
             config=self.config
         ).to(self.config.DEVICE)
 
+        # Setup results logger
+        print("[3/4] Initializing analytics logger...")
+        self.results_logger = TeaLeafResultsLogger(self.config, self.config.EXPORT_DIR)
+        self.results_logger.log_class_information(self.data_module)
+
         # Setup trainer
-        print("\n[3/5] Setting up training components...")
+        print("[4/4] Setting up training components...")
         self.trainer = PrototypeTrainer(self.model, self.data_module, self.config)
 
-        # Setup evaluator and visualizer
-        print("\n[4/5] Setting up evaluation and visualization...")
-        self.evaluator = ModelEvaluator(self.model, self.data_module, self.config)
-        self.visualizer = VisualizationEngine(self.model, self.data_module, self.config)
-
-        print("\n[5/5] System setup complete!")
+        print("\n✅ System setup complete!")
         return self
 
     def train(self):
-        """Train the model"""
+        """Train the model with comprehensive analytics logging"""
         if self.trainer is None:
             self.setup()
 
         print("\n" + "=" * 50)
-        print("STARTING TRAINING")
+        print("STARTING TRAINING WITH ANALYTICS LOGGING")
         print("=" * 50)
+        print(f"Training for {self.config.EPOCHS} epochs")
+        print(f"Classes: {self.data_module.splits['known_classes']}")
 
+        # Train the model
         history, best_state = self.trainer.train()
 
-        # Load best model for evaluation
+        # Load best model for final evaluation
         if best_state:
             self.model.backbone.load_state_dict(best_state['backbone'])
             self.model.head.load_state_dict(best_state['head'])
+            print(f"✅ Loaded best model for final evaluation")
 
         return history, best_state
 
-    def evaluate(self, tag="main"):
-        """Comprehensive model evaluation"""
+    def evaluate(self):
+        """Evaluate model and collect metrics - NO PLOTTING"""
         if self.model is None:
             raise ValueError("Model not trained. Call train() first.")
 
         print("\n" + "=" * 50)
-        print("MODEL EVALUATION")
+        print("FINAL MODEL EVALUATION - COLLECTING METRICS")
         print("=" * 50)
+
+        # Setup evaluator for metrics collection only
+        self.evaluator = ModelEvaluator(self.model, self.data_module, self.config)
 
         # Get validation predictions
         val_acc, val_logits, val_labels, val_paths = self.trainer.validate()
-        val_logits = torch.cat(val_logits)
-        val_labels = torch.cat(val_labels)
+        val_logits_tensor = torch.cat(val_logits)
+        val_labels_tensor = torch.cat(val_labels)
 
-        print(f"Validation Accuracy: {val_acc:.3f}")
+        print(f"Validation Accuracy: {val_acc:.4f}")
 
-        # Generate all evaluation artifacts
-        export_dir = self.config.EXPORT_DIR
-
-        # 1. Confusion Matrix
-        print("\n[1/6] Generating confusion matrix...")
-        self.evaluator.compute_confusion_matrix(
-            val_logits.numpy(), val_labels.numpy(),
-            save_path=export_dir / f"{tag}_confusion_matrix.png"
+        # Compute metrics WITHOUT plotting
+        print("\n[1/4] Computing confusion matrix...")
+        cm = self.evaluator.compute_confusion_matrix(
+            val_logits_tensor.numpy(),
+            val_labels_tensor.numpy(),
+            # save_path=None  # No plotting!
         )
 
-        # 2. Classification Report
-        print("[2/6] Generating classification report...")
+        print("[2/4] Computing classification report...")
         class_report = self.evaluator.compute_classification_report(
-            val_logits.numpy(), val_labels.numpy(),
-            save_path=export_dir / f"{tag}_classification_report"
+            val_logits_tensor.numpy(),
+            val_labels_tensor.numpy(),
+            # save_path=None  # No plotting!
         )
-        print("Class-wise performance:")
-        print(class_report.round(3))
 
-        # 3. Reliability Diagram
-        print("[3/6] Generating reliability diagram...")
-        ece = self.evaluator.reliability_diagram(
-            val_logits.numpy(), val_labels.numpy(),
-            save_path=export_dir / f"{tag}_reliability_diagram.png"
+        print("[3/4] Computing reliability metrics...")
+        ece = self.evaluator.compute_reliability_metrics(
+            val_logits_tensor.numpy(),
+            val_labels_tensor.numpy(),
+            # save_path=None  # No plotting!
         )
-        print(f"Expected Calibration Error: {ece:.4f}")
 
-        # 4. OOD Analysis
-        print("[4/6] Performing OOD analysis...")
+        print("[4/4] Computing OOD metrics...")
         ood_metrics = self.evaluator.compute_ood_metrics(
             self.data_module.val_loader,
             self.data_module.ood_loader
         )
 
-        if ood_metrics:
-            print(f"OOD Detection - AUROC: {ood_metrics['auroc']:.3f}, "
-                  f"FPR@95TPR: {ood_metrics['fpr_95']:.3f}")
-            self.visualizer.plot_ood_analysis(
-                ood_metrics,
-                save_path=export_dir / f"{tag}_ood_analysis.png"
-            )
+        # Prepare final metrics
+        # overall_metrics = {
+        #     'accuracy': float(val_acc),
+        #     'precision': float(class_report['weighted avg']['precision']),
+        #     'recall': float(class_report['weighted avg']['recall']),
+        #     'f1_score': float(class_report['weighted avg']['f1-score']),
+        #     'ece': float(ece)
+        # }
+        overall_metrics = {
+    'accuracy': class_report.attrs['robust_metrics']['accuracy'],
+    'precision': class_report.attrs['robust_metrics']['weighted_avg']['precision'],
+    'recall': class_report.attrs['robust_metrics']['weighted_avg']['recall'],
+    'f1_score': class_report.attrs['robust_metrics']['weighted_avg']['f1_score'],
+    'ece': ece  # This is already a float from compute_reliability_metrics
+}
 
-        # 5. t-SNE Visualization
-        print("[5/6] Generating t-SNE plot...")
-        self.evaluator.generate_tsne_plot(
-            self.data_module.val_loader,
-            self.data_module.ood_loader,
-            save_path=export_dir / f"{tag}_tsne_visualization.png"
+        # Log final results to analytics
+        self.results_logger.log_final_metrics(
+            test_accuracy=val_acc,
+            classification_report=class_report,
+            confusion_matrix=cm,
+            true_labels=val_labels_tensor.numpy(),
+            predictions=val_logits_tensor.argmax(1).numpy(),
+            ood_metrics=ood_metrics
         )
 
-        # 6. Prototype Visualizations
-        print("[6/6] Generating prototype visualizations...")
-        self.visualizer.visualize_prototype_overlays(
-            self.data_module.val_ds,
-            save_path=export_dir / f"{tag}_prototype_overlays.png"
+        self.results_logger.log_final_model_performance(
+            overall_metrics=overall_metrics,
+            per_class_metrics=class_report,
+            confusion_matrix=cm,
+            ood_metrics=ood_metrics
         )
 
-        self.visualizer.export_prototype_tiles(
-            self.data_module.train_ds,
-            save_dir=export_dir / f"{tag}_prototype_tiles"
-        )
+        # Log model paths
+        model_paths = {
+            'best_model': str(self.config.EXPORT_DIR / "best_model.pth"),
+            'final_model': str(self.config.EXPORT_DIR / "final_model.pth")
+        }
+        self.results_logger.log_paths(model_paths)
 
-        print(f"\nAll evaluation artifacts saved to: {export_dir}")
+        # Save final model
+        torch.save({
+            'backbone': self.model.backbone.state_dict(),
+            'head': self.model.head.state_dict(),
+            'known_classes': self.data_module.splits['known_classes'],
+            'config': self.config.__dict__
+        }, self.config.EXPORT_DIR / "final_model.pth")
+
+        # Save all analytics to JSON
+        results_file = self.results_logger.save_results("training_results.json")
+
+        print(f"\n✅ Evaluation complete - All metrics collected!")
+        print(f"📊 Validation Accuracy: {val_acc:.4f}")
+        print(f"💾 Analytics JSON: {results_file}")
+        print(f"💾 Final model: {self.config.EXPORT_DIR / 'final_model.pth'}")
 
         return {
             'validation_accuracy': val_acc,
             'ece': ece,
             'ood_metrics': ood_metrics,
-            'class_report': class_report
+            'class_report': class_report,
+            'results_file': results_file
         }
 
-    def run_ood_sweep(self):
-        """Run OOD detection sweep across all classes"""
-        if not self.config.RUN_OOD_SWEEP:
-            print("OOD sweep is disabled in config. Set RUN_OOD_SWEEP=True to enable.")
-            return
+    def run_complete_pipeline(self):
+        """Run complete training and evaluation pipeline"""
+        try:
+            # Setup
+            self.setup()
 
-        print("\n" + "=" * 50)
-        print("OOD DETECTION SWEEP")
-        print("=" * 50)
+            # Train
+            print("\n🚀 Starting training...")
+            history, best_state = self.train()
 
-        sweep_results = []
-        known_classes = self.data_module.splits['known_classes']
+            # Evaluate (collect metrics only)
+            print("\n📈 Collecting final metrics...")
+            results = self.evaluate()
 
-        for unknown_class in known_classes:
-            print(f"\nRunning OOD sweep with '{unknown_class}' as unknown...")
+            print("\n" + "=" * 50)
+            print("🎉 PIPELINE COMPLETED SUCCESSFULLY!")
+            print("=" * 50)
+            print(f"📈 Best Validation Accuracy: {results['validation_accuracy']:.4f}")
 
-            # Create new data split with current class as unknown
-            temp_splitter = TeaLeafDataSplitter(
-                self.config.DATA_ROOT,
-                unknown_class=unknown_class,
-                val_ratio=self.config.VAL_RATIO,
-                seed=self.config.SEED
-            )
-            temp_splits = temp_splitter.build_splits()
+            if results['ood_metrics']:
+                print(f"🚨 OOD Detection AUROC: {results['ood_metrics']['auroc']:.4f}")
 
-            # Skip if this would leave too few classes
-            if len(temp_splits['known_classes']) < 2:
-                print(f"  Skipping {unknown_class} - too few classes remaining")
-                continue
+            print(f"💾 Analytics JSON: {results['results_file']}")
+            print(f"🔧 Next: Run 'python generate_plots.py' to generate all visualizations")
 
-            # Train and evaluate with this OOD setup
-            temp_model = TeaLeafModel(
-                num_classes=len(temp_splits['known_classes']),
-                config=self.config
-            ).to(self.config.DEVICE)
+            return results
 
-            temp_data_module = DataModule(self.config)
-            temp_data_module.splits = temp_splits
-            # Note: You'd need to recreate loaders here - simplified for example
-
-            # For now, just record the configuration
-            sweep_results.append({
-                'unknown_class': unknown_class,
-                'remaining_classes': len(temp_splits['known_classes']),
-                'ood_samples': len(temp_splits['ood_files'])
-            })
-
-        # Save sweep summary
-        import pandas as pd
-        sweep_df = pd.DataFrame(sweep_results)
-        sweep_path = self.config.EXPORT_DIR / "ood_sweep_summary.csv"
-        sweep_df.to_csv(sweep_path, index=False)
-        print(f"\nOOD sweep summary saved to: {sweep_path}")
-
-        return sweep_results
+        except Exception as e:
+            print(f"\n❌ Pipeline failed: {e}")
+            raise
 
 
 def main():
     """Main execution function"""
     try:
-        # Initialize the system
         system = TeaLeafClassificationSystem()
-
-        # Setup and train
-        system.setup()
-        history, best_state = system.train()
-
-        # Evaluate
-        results = system.evaluate()
-
-        # Optional: Run OOD sweep
-        if system.config.RUN_OOD_SWEEP:
-            system.run_ood_sweep()
-
-        print("\n" + "=" * 50)
-        print("EXPERIMENT COMPLETED SUCCESSFULLY!")
-        print("=" * 50)
-        print(f"Best Validation Accuracy: {results['validation_accuracy']:.3f}")
-
-        if results['ood_metrics']:
-            print(f"OOD Detection AUROC: {results['ood_metrics']['auroc']:.3f}")
-
-        print(f"\nAll artifacts saved to: {system.config.EXPORT_DIR}")
+        results = system.run_complete_pipeline()
 
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
-        print("Please check your dataset path and configuration.")
+        print(f"\n❌ Pipeline failed: {e}")
         sys.exit(1)
 
 
