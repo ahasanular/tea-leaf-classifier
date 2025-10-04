@@ -27,9 +27,9 @@ class TeaLeafResultsLogger:
                 'completed': False
             },
             'training_config': self._extract_config(),
-            'training_history': [],
+            'training_history': [],  # This will store ALL epoch data
             'class_information': {},
-            'final_model_performance': {},
+            # 'final_model_performance': {},
             'test_results': {},
             'paths_and_checkpoints': {}
         }
@@ -102,12 +102,12 @@ class TeaLeafResultsLogger:
         Log comprehensive epoch analytics - stored in memory
         """
         epoch_data = {
-            'epoch': epoch,
+            'epoch': int(epoch),
             'train_loss': float(train_loss),
             'train_accuracy': float(train_acc),
             'val_accuracy': float(val_acc),
             'learning_rate': float(lr),
-            'prototype_push_epoch': prototype_push
+            'prototype_push_epoch': bool(prototype_push)
         }
 
         # Update best model tracking
@@ -115,33 +115,34 @@ class TeaLeafResultsLogger:
             self.best_val_accuracy = val_acc
             self.best_epoch = epoch
 
-        # Store in memory
+        # Store in memory - this is where training history gets populated
         self.results['training_history'].append(epoch_data)
+
+        print(f"📊 Epoch {epoch} logged: train_acc={train_acc:.3f}, val_acc={val_acc:.3f}")
 
     def log_final_metrics(self, test_accuracy, classification_report,
                           confusion_matrix, true_labels, predictions, ood_metrics=None):
         """Log final test metrics"""
 
-        # Convert classification report to dictionary if it's a string
+        # Ensure classification_report is a dictionary, not a string
         if isinstance(classification_report, str):
-            report_dict = self._parse_classification_report(classification_report)
-        else:
-            report_dict = classification_report
+            # Parse the string into a dictionary
+            classification_report = self._parse_classification_report(classification_report)
 
         self.results['test_results'] = {
             'accuracy': float(test_accuracy),
-            'classification_report': report_dict,
+            'classification_report': classification_report,  # This should be a dict
             'confusion_matrix': confusion_matrix.tolist() if hasattr(confusion_matrix, 'tolist') else confusion_matrix,
             'true_labels': true_labels if isinstance(true_labels, list) else true_labels.tolist(),
             'predictions': predictions if isinstance(predictions, list) else predictions.tolist(),
-            'ood_detection_metrics': ood_metrics
+            # 'ood_detection_metrics': ood_metrics
         }
 
     def log_final_model_performance(self, overall_metrics, per_class_metrics,
                                     confusion_matrix, ood_metrics=None):
         """Log final model performance summary"""
         self.results['final_model_performance'] = {
-            'best_epoch': self.best_epoch,
+            'best_epoch': int(self.best_epoch),
             'best_val_accuracy': float(self.best_val_accuracy),
             'overall_metrics': overall_metrics,
             'per_class_metrics': per_class_metrics,
@@ -160,27 +161,33 @@ class TeaLeafResultsLogger:
 
     def _parse_classification_report(self, report_str):
         """Parse sklearn classification report string into dictionary"""
-        lines = report_str.split('\n')
+        lines = report_str.strip().split('\n')
         report_dict = {}
 
         for line in lines:
-            if line.strip() and not line.startswith('---'):
-                parts = line.split()
-                if len(parts) >= 5 and parts[0] != 'accuracy':
-                    class_name = parts[0]
+            line = line.strip()
+            if not line or line.startswith('---'):
+                continue
+
+            parts = line.split()
+            if len(parts) >= 5:
+                # Class rows: "class_name precision recall f1-score support"
+                class_name = parts[0]
+                try:
                     report_dict[class_name] = {
                         'precision': float(parts[1]),
                         'recall': float(parts[2]),
                         'f1_score': float(parts[3]),
                         'support': int(parts[4])
                     }
-                elif parts[0] == 'accuracy':
+                except (ValueError, IndexError):
+                    continue
+            elif len(parts) >= 2 and parts[0] == 'accuracy':
+                # Accuracy row
+                try:
                     report_dict['accuracy'] = float(parts[1])
-                    report_dict['macro_avg'] = {
-                        'precision': float(parts[5]),
-                        'recall': float(parts[6]),
-                        'f1_score': float(parts[7])
-                    }
+                except ValueError:
+                    pass
 
         return report_dict
 

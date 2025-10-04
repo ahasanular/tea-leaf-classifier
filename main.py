@@ -69,6 +69,8 @@ class TeaLeafClassificationSystem:
         print("[4/4] Setting up training components...")
         self.trainer = PrototypeTrainer(self.model, self.data_module, self.config)
 
+        self.trainer.results_logger = self.results_logger
+
         print("\n✅ System setup complete!")
         return self
 
@@ -125,11 +127,10 @@ class TeaLeafClassificationSystem:
         class_report = self.evaluator.compute_classification_report(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
-            # save_path=None  # No plotting!
         )
 
         print("[3/4] Computing reliability metrics...")
-        ece = self.evaluator.compute_reliability_metrics(
+        reliability_metrics = self.evaluator.compute_reliability_metrics(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
             # save_path=None  # No plotting!
@@ -142,20 +143,27 @@ class TeaLeafClassificationSystem:
         )
 
         # Prepare final metrics
-        # overall_metrics = {
-        #     'accuracy': float(val_acc),
-        #     'precision': float(class_report['weighted avg']['precision']),
-        #     'recall': float(class_report['weighted avg']['recall']),
-        #     'f1_score': float(class_report['weighted avg']['f1-score']),
-        #     'ece': float(ece)
-        # }
+        # print("=" * 50)
+        # print(reliability_metrics)
+        # print(reliability_metrics.get('ece', "Pai nai"))
+        # print("=" * 50)
         overall_metrics = {
-    'accuracy': class_report.attrs['robust_metrics']['accuracy'],
-    'precision': class_report.attrs['robust_metrics']['weighted_avg']['precision'],
-    'recall': class_report.attrs['robust_metrics']['weighted_avg']['recall'],
-    'f1_score': class_report.attrs['robust_metrics']['weighted_avg']['f1_score'],
-    'ece': ece  # This is already a float from compute_reliability_metrics
-}
+            'accuracy': val_acc,
+            'precision': float(class_report['weighted avg']['precision']),
+            'recall': float(class_report['weighted avg']['recall']),
+            'f1_score': float(class_report['weighted avg']['f1-score']),
+            'ece': reliability_metrics.get('ece', "Pai nai")
+        }
+        # print(" = " * 20)
+        # print(class_report)
+        # print(" = " * 20)
+        # overall_metrics = {
+        #     'accuracy': class_report['robust_metrics']['accuracy'],
+        #     'precision': class_report['robust_metrics']['weighted_avg']['precision'],
+        #     'recall': class_report['robust_metrics']['weighted_avg']['recall'],
+        #     'f1_score': class_report['robust_metrics']['weighted_avg']['f1_score'],
+        #     'ece': ece  # This is already a float from compute_reliability_metrics
+        # }
 
         # Log final results to analytics
         self.results_logger.log_final_metrics(
@@ -167,12 +175,12 @@ class TeaLeafClassificationSystem:
             ood_metrics=ood_metrics
         )
 
-        self.results_logger.log_final_model_performance(
-            overall_metrics=overall_metrics,
-            per_class_metrics=class_report,
-            confusion_matrix=cm,
-            ood_metrics=ood_metrics
-        )
+        # self.results_logger.log_final_model_performance(
+        #     overall_metrics=overall_metrics,
+        #     per_class_metrics=class_report,
+        #     confusion_matrix=cm,
+        #     ood_metrics=ood_metrics
+        # )
 
         # Log model paths
         model_paths = {
@@ -199,7 +207,7 @@ class TeaLeafClassificationSystem:
 
         return {
             'validation_accuracy': val_acc,
-            'ece': ece,
+            'ece': reliability_metrics['ece'],
             'ood_metrics': ood_metrics,
             'class_report': class_report,
             'results_file': results_file

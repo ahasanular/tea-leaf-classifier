@@ -56,6 +56,8 @@ class PrototypeTrainer:
         self.best_val_acc = 0.0
         self.best_state = None
 
+        self.results_logger = None
+
         self._setup_training()
 
     def _setup_training(self):
@@ -204,10 +206,22 @@ class PrototypeTrainer:
                   f'Train Acc: {train_acc:.3f} | '
                   f'Val Acc: {val_acc:.3f}')
 
+            if self.results_logger:
+                self.results_logger.log_training_epoch(
+                    epoch=epoch,
+                    train_loss=train_loss,
+                    train_acc=train_acc,
+                    val_acc=val_acc,
+                    lr=current_lr,
+                    prototype_push=(epoch + 1) % self.config.PUSH_EVERY_EPOCH == 0
+                )
+
             # Early stopping check (optional)
             if epoch > 10 and val_acc < 0.1:  # If model is not learning
                 print("[WARNING] Model shows poor performance. Stopping early.")
                 break
+
+
 
         total_time = time.time() - start_time
         print(f"\nTraining completed in {total_time:.1f}s")
