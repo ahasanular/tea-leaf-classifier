@@ -192,7 +192,7 @@ class TeaLeafDataset(Dataset):
         img = Image.open(self.paths[idx]).convert("RGB")
 
         # Apply transformations
-        img_t = self.transform(img) if self.transform else transforms.ToTensor()(img)
+        img_t = self.transform(img) if self.transform else self.transform.ToTensor()(img)
 
         # Handle labels
         if self.labels is None:

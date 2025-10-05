@@ -46,8 +46,13 @@ class TeaLeafModel(nn.Module):
 
     def __init__(self, num_classes, config):
         super().__init__()
+
         self.config = config
         self.num_classes = num_classes
+
+        if self.config.DEVICE == 'mps':
+            import ssl
+            ssl._create_default_https_context = ssl._create_unverified_context
 
         # Backbone
         self.backbone = EfficientNetBackbone(

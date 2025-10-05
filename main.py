@@ -25,7 +25,7 @@ from models import TeaLeafModel
 from trainer import PrototypeTrainer
 from metrics import ModelEvaluator
 from utils.results_logger import TeaLeafResultsLogger
-from visualizer import PrototypeOverlayVisualizer
+from visualizer import PrototypeOverlayVisualizer, OODRocVisualizer
 from sklearn.metrics import (classification_report, confusion_matrix, roc_auc_score,
                              roc_curve, precision_recall_fscore_support)
 import pandas as pd
@@ -66,7 +66,7 @@ class TeaLeafClassificationSystem:
 
         # Setup results logger
         print("[3/4] Initializing analytics logger...")
-        self.results_logger = TeaLeafResultsLogger(self.config, self.config.EXPORT_DIR)
+        self.results_logger = TeaLeafResultsLogger(self.config, self.config.EXPORT_DIR / self.config.UNKNOWN_CLASS_NAME)
         self.results_logger.log_class_information(self.data_module)
 
         # Setup trainer
@@ -120,35 +120,38 @@ class TeaLeafClassificationSystem:
         print(f"Validation Accuracy: {val_acc:.4f}")
 
         # Compute metrics WITHOUT plotting
-        print("\n[1/5] Computing confusion matrix...")
+        print("\n[1/6] Computing confusion matrix...")
         cm = self.evaluator.compute_confusion_matrix(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
             # save_path=None  # No plotting!
         )
 
-        print("[2/5] Computing classification report...")
+        print("[2/6] Computing classification report...")
         class_report = self.evaluator.compute_classification_report(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
         )
 
-        print("[3/5] Computing reliability metrics...")
+        print("[3/6] Computing reliability metrics...")
         reliability_metrics = self.evaluator.compute_reliability_metrics(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
             # save_path=None  # No plotting!
         )
 
-        print("[4/5] Computing OOD metrics...")
+        print("[4/6] Computing OOD metrics...")
         ood_metrics = self.evaluator.compute_ood_metrics(
             self.data_module.val_loader,
             self.data_module.ood_loader
         )
 
-        print("[5/5] Generating prototype overlay...")
-        visualizer = PrototypeOverlayVisualizer(self.model, self.config)
+        print("[5/6] Generating OOD metrics plots...")
+        plotter = OODRocVisualizer(self.config)
+        plotter.generate(result=ood_metrics)
 
+        print("[6/6] Generating prototype overlay...")
+        visualizer = PrototypeOverlayVisualizer(self.model, self.config)
         visualizer.visualize_prototypes(self.data_module.val_ds, samples=6)
 
         overall_metrics = {
@@ -171,8 +174,8 @@ class TeaLeafClassificationSystem:
 
         # Log model paths
         model_paths = {
-            'best_model': str(self.config.EXPORT_DIR / "best_model.pth"),
-            'final_model': str(self.config.EXPORT_DIR / "final_model.pth")
+            'best_model': str(self.config.EXPORT_DIR/ self.config.UNKNOWN_CLASS_NAME / "best_model.pth"),
+            'final_model': str(self.config.EXPORT_DIR / self.config.UNKNOWN_CLASS_NAME / "final_model.pth")
         }
         self.results_logger.log_paths(model_paths)
 
@@ -182,7 +185,7 @@ class TeaLeafClassificationSystem:
             'head': self.model.head.state_dict(),
             'known_classes': self.data_module.splits['known_classes'],
             'config': self.config.__dict__
-        }, self.config.EXPORT_DIR / "final_model.pth")
+        }, self.config.EXPORT_DIR / self.config.UNKNOWN_CLASS_NAME / "final_model.pth")
 
         # Save all analytics to JSON
         results_file = self.results_logger.save_results("training_results.json")
@@ -190,14 +193,15 @@ class TeaLeafClassificationSystem:
         print(f"\n✅ Evaluation complete - All metrics collected!")
         print(f"📊 Validation Accuracy: {val_acc:.4f}")
         print(f"💾 Analytics JSON: {results_file}")
-        print(f"💾 Final model: {self.config.EXPORT_DIR / 'final_model.pth'}")
+        print(f"💾 Final model: {self.config.EXPORT_DIR / self.config.UNKNOWN_CLASS_NAME / 'final_model.pth'}")
 
         return {
             'validation_accuracy': val_acc,
             'ece': reliability_metrics['ece'],
             'ood_metrics': ood_metrics,
             'class_report': class_report,
-            'results_file': results_file
+            'results_file': results_file,
+            'known_classes': self.data_module.splits['known_classes'],
         }
 
     def run_complete_pipeline(self):
@@ -223,8 +227,44 @@ class TeaLeafClassificationSystem:
                 print(f"🚨 OOD Detection AUROC: {results['ood_metrics']['auroc']:.4f}")
 
             print(f"💾 Analytics JSON: {results['results_file']}")
-            print(f"🔧 Next: Run 'python generate_plots.py' to generate all visualizations")
+            # print(f"🔧 Next: Run 'python generate_plots.py' to generate all visualizations")
 
+            from generate_plots import TeaLeafPlotGenerator
+            plotter = TeaLeafPlotGenerator(config=self.config)
+            plotter.generate_all_plots()
+
+            known_classes = results['known_classes']
+            if self.config.RUN_OOD_SWEEP:
+                for known_class in known_classes:
+                    print(f"\n 🚀 Running with new unknows class {known_class}...")
+                    self.config.UNKNOWN_CLASS_NAME = known_class
+                    # self.config.EXPORT_DIR = Path(f"./output-ood-{known_class}")
+                    self.setup()
+
+                    # Train
+                    print("\n🚀 Starting training...")
+                    history, best_state = self.train()
+
+                    print("\n📈 Collecting final metrics...")
+                    results = self.evaluate()
+
+                    print("\n" + "=" * 50)
+                    print("🎉 PIPELINE COMPLETED SUCCESSFULLY!")
+                    print("=" * 50)
+                    print(f"📈 Best Validation Accuracy: {results['validation_accuracy']:.4f}")
+
+                    if results['ood_metrics']:
+                        print(f"🚨 OOD Detection AUROC: {results['ood_metrics']['auroc']:.4f}")
+
+                    from generate_plots import TeaLeafPlotGenerator
+                    plotter = TeaLeafPlotGenerator(config=self.config)
+                    plotter.generate_all_plots()
+
+                from visualizer import OODComparisonTable
+                table = OODComparisonTable(self.config)
+                table.collect_results()
+                # table.show_summary()
+                table.save_csv()
             return results
 
         except Exception as e:

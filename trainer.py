@@ -162,9 +162,6 @@ class PrototypeTrainer:
         for epoch in range(self.config.EPOCHS):
             epoch_start = time.time()
 
-            # Update learning rate
-            current_lr = self.scheduler.step()
-
             # Train one epoch
             train_loss, train_acc = self.train_epoch(epoch)
 
@@ -179,6 +176,9 @@ class PrototypeTrainer:
 
             # Validate
             val_acc, val_logits, val_labels, val_paths = self.validate()
+
+            # Update learning rate
+            current_lr = self.scheduler.step()
 
             # Update history
             self.history['train_loss'].append(train_loss)

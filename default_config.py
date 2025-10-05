@@ -60,6 +60,7 @@ class Config:
 
     def __init__(self):
         self.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+        os.makedirs(self.EXPORT_DIR / self.UNKNOWN_CLASS_NAME, exist_ok=True)
 
     @classmethod
     def print_config(cls):

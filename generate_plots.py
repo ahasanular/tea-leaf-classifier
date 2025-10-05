@@ -19,8 +19,8 @@ class TeaLeafPlotGenerator:
     """Generate comprehensive plots from training results JSON"""
 
     def __init__(self, config):
-        self.config = config()
-        input_result = Path(self.config.EXPORT_DIR) / 'training_results.json'
+        self.config = config
+        input_result = Path(self.config.EXPORT_DIR / self.config.UNKNOWN_CLASS_NAME) / 'training_results.json'
         self.results_json_path = input_result
 
         if not self.results_json_path.exists():
@@ -370,17 +370,17 @@ class TeaLeafPlotGenerator:
 
 def main():
     """Main function to handle command line arguments"""
-    parser = argparse.ArgumentParser(description='Generate plots from tea leaf training results')
-    parser.add_argument('--results', '-r', default='./output2/training_results.json',
-                        help='Path to training_results.json file')
-    parser.add_argument('--output', '-o',
-                        help='Output directory for plots (default: same as results file)')
-
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(description='Generate plots from tea leaf training results')
+    # parser.add_argument('--results', '-r', default='./output2/training_results.json',
+    #                     help='Path to training_results.json file')
+    # parser.add_argument('--output', '-o',
+    #                     help='Output directory for plots (default: same as results file)')
+    #
+    # args = parser.parse_args()
 
     try:
         # Initialize plot generator
-        plotter = TeaLeafPlotGenerator(config=Config)
+        plotter = TeaLeafPlotGenerator(config=Config())
 
         # Generate all plots
         plotter.generate_all_plots()
