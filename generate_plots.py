@@ -12,26 +12,25 @@ import pandas as pd
 from pathlib import Path
 import argparse
 import sys
+from default_config import Config
 
 
 class TeaLeafPlotGenerator:
     """Generate comprehensive plots from training results JSON"""
 
-    def __init__(self, results_json_path, output_dir=None):
-        self.results_json_path = Path(results_json_path)
+    def __init__(self, config):
+        self.config = config()
+        input_result = Path(self.config.EXPORT_DIR) / 'training_results.json'
+        self.results_json_path = input_result
 
         if not self.results_json_path.exists():
-            raise FileNotFoundError(f"Results file not found: {results_json_path}")
+            raise FileNotFoundError(f"Results file not found: {input_result}")
 
         # Load results
         with open(self.results_json_path, 'r') as f:
             self.results = json.load(f)
 
-        # Set output directory
-        if output_dir:
-            self.output_dir = Path(output_dir)
-        else:
-            self.output_dir = self.results_json_path.parent / "plots"
+        self.output_dir = self.results_json_path.parent / "plots"
 
         self.output_dir.mkdir(exist_ok=True)
 
@@ -381,7 +380,7 @@ def main():
 
     try:
         # Initialize plot generator
-        plotter = TeaLeafPlotGenerator(args.results, args.output)
+        plotter = TeaLeafPlotGenerator(config=Config)
 
         # Generate all plots
         plotter.generate_all_plots()

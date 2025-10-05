@@ -25,6 +25,10 @@ from models import TeaLeafModel
 from trainer import PrototypeTrainer
 from metrics import ModelEvaluator
 from utils.results_logger import TeaLeafResultsLogger
+from visualizer import PrototypeOverlayVisualizer
+from sklearn.metrics import (classification_report, confusion_matrix, roc_auc_score,
+                             roc_curve, precision_recall_fscore_support)
+import pandas as pd
 
 
 class TeaLeafClassificationSystem:
@@ -116,57 +120,47 @@ class TeaLeafClassificationSystem:
         print(f"Validation Accuracy: {val_acc:.4f}")
 
         # Compute metrics WITHOUT plotting
-        print("\n[1/4] Computing confusion matrix...")
+        print("\n[1/5] Computing confusion matrix...")
         cm = self.evaluator.compute_confusion_matrix(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
             # save_path=None  # No plotting!
         )
 
-        print("[2/4] Computing classification report...")
+        print("[2/5] Computing classification report...")
         class_report = self.evaluator.compute_classification_report(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
         )
 
-        print("[3/4] Computing reliability metrics...")
+        print("[3/5] Computing reliability metrics...")
         reliability_metrics = self.evaluator.compute_reliability_metrics(
             val_logits_tensor.numpy(),
             val_labels_tensor.numpy(),
             # save_path=None  # No plotting!
         )
 
-        print("[4/4] Computing OOD metrics...")
+        print("[4/5] Computing OOD metrics...")
         ood_metrics = self.evaluator.compute_ood_metrics(
             self.data_module.val_loader,
             self.data_module.ood_loader
         )
 
-        # Prepare final metrics
-        # print("=" * 50)
-        # print(reliability_metrics)
-        # print(reliability_metrics.get('ece', "Pai nai"))
-        # print("=" * 50)
+        print("[5/5] Generating prototype overlay...")
+        visualizer = PrototypeOverlayVisualizer(self.model, self.config)
+
+        visualizer.visualize_prototypes(self.data_module.val_ds, samples=6)
+
         overall_metrics = {
             'accuracy': val_acc,
             'precision': float(class_report['weighted avg']['precision']),
             'recall': float(class_report['weighted avg']['recall']),
             'f1_score': float(class_report['weighted avg']['f1-score']),
-            'ece': reliability_metrics.get('ece', "Pai nai")
+            'ece': reliability_metrics.get('ece')
         }
-        # print(" = " * 20)
-        # print(class_report)
-        # print(" = " * 20)
-        # overall_metrics = {
-        #     'accuracy': class_report['robust_metrics']['accuracy'],
-        #     'precision': class_report['robust_metrics']['weighted_avg']['precision'],
-        #     'recall': class_report['robust_metrics']['weighted_avg']['recall'],
-        #     'f1_score': class_report['robust_metrics']['weighted_avg']['f1_score'],
-        #     'ece': ece  # This is already a float from compute_reliability_metrics
-        # }
-
         # Log final results to analytics
         self.results_logger.log_final_metrics(
+            overall_metrics=overall_metrics,
             test_accuracy=val_acc,
             classification_report=class_report,
             confusion_matrix=cm,
@@ -174,13 +168,6 @@ class TeaLeafClassificationSystem:
             predictions=val_logits_tensor.argmax(1).numpy(),
             ood_metrics=ood_metrics
         )
-
-        # self.results_logger.log_final_model_performance(
-        #     overall_metrics=overall_metrics,
-        #     per_class_metrics=class_report,
-        #     confusion_matrix=cm,
-        #     ood_metrics=ood_metrics
-        # )
 
         # Log model paths
         model_paths = {

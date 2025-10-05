@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
+from networkx.algorithms.reciprocity import overall_reciprocity
+
 
 class TeaLeafResultsLogger:
     """
@@ -120,7 +122,7 @@ class TeaLeafResultsLogger:
 
         print(f"📊 Epoch {epoch} logged: train_acc={train_acc:.3f}, val_acc={val_acc:.3f}")
 
-    def log_final_metrics(self, test_accuracy, classification_report,
+    def log_final_metrics(self, overall_metrics, test_accuracy, classification_report,
                           confusion_matrix, true_labels, predictions, ood_metrics=None):
         """Log final test metrics"""
 
@@ -131,6 +133,7 @@ class TeaLeafResultsLogger:
 
         self.results['test_results'] = {
             'accuracy': float(test_accuracy),
+            'overall_metrics': overall_metrics,
             'classification_report': classification_report,  # This should be a dict
             'confusion_matrix': confusion_matrix.tolist() if hasattr(confusion_matrix, 'tolist') else confusion_matrix,
             'true_labels': true_labels if isinstance(true_labels, list) else true_labels.tolist(),

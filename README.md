@@ -92,7 +92,6 @@ After running, check the output/ folder for:
 - 📈 Training curves - Monitor model progress
 - 🎯 Confusion matrix - See where model gets confused
 - 🔍 Prototype overlays - Visual explanations for predictions
-- 🗺️ t-SNE plots - How the model "sees" different diseases
 - 📋 Classification reports - Precision/recall for each disease
 - 🚨 OOD analysis - How well it detects unfamiliar cases
 

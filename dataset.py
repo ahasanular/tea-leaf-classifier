@@ -190,6 +190,7 @@ class DataModule:
         self.splits = None
         self.train_loader = None
         self.val_loader = None
+        self.val_ds = None
         self.ood_loader = None
 
     def prepare_data(self):
@@ -207,7 +208,7 @@ class DataModule:
             self.splits['id_remap']
         )
 
-        val_ds = TeaLeafDataset(
+        self.val_ds = TeaLeafDataset(
             self.splits['val_files'],
             self.splits['val_labels'],
             test_tfms,
@@ -238,7 +239,7 @@ class DataModule:
         )
 
         self.val_loader = DataLoader(
-            val_ds,
+            self.val_ds,
             batch_size=self.config.BATCH_SIZE,
             shuffle=False,
             num_workers=2,
