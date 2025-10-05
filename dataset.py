@@ -17,22 +17,41 @@ from preprocessing import get_transforms
 class NameResolver:
     """Handles class name resolution and aliases"""
 
+    # _ALIAS_BANK = {
+    #     # teaLeafBD
+    #     'helopeltis': ['tea mosquito bug', 'mosquito bug', 'helopeltis antonii', 'tea_mosquito_bug',
+    #                    'tea-mosquito-bug'],
+    #     'brownblight': ['brown blight', 'blight (brown)', 'brown_blight'],
+    #     'grayblight': ['grey blight', 'gray blight', 'grey_blight', 'gray_blight'],
+    #     'redspider': ['red spider', 'red spider mite', 'redspider mite', 'mite'],
+    #     'greenmiridbug': ['green mirid bug', 'mirid bug', 'mirid'],
+    #     'algalspot': ['algal leaf spot', 'tea algal leaf spot', 'algalspot'],
+    #     'healthy': ['fresh', 'normal'],
+    #
+    #
+    #     # MouloviBazar
+    #     'tealeafblight': ['tea leaf blight', 'leaf blight'],
+    #     'tearedleafspot': ['tea red leaf spot', 'red leaf spot'],
+    #     'tearedscab': ['tea red scab', 'red scab'],
+    # }
+
     _ALIAS_BANK = {
-        # teaLeafBD
+        # Consolidated keys with all aliases merged
         'helopeltis': ['tea mosquito bug', 'mosquito bug', 'helopeltis antonii', 'tea_mosquito_bug',
                        'tea-mosquito-bug'],
-        'brownblight': ['brown blight', 'blight (brown)', 'brown_blight'],
-        'grayblight': ['grey blight', 'gray blight', 'grey_blight', 'gray_blight'],
+        'brownblight': ['brown blight', 'blight (brown)', 'brown_blight', 'brown blight'],
+        'grayblight': ['grey blight', 'gray blight', 'grey_blight', 'gray_blight', 'gray light'],
         'redspider': ['red spider', 'red spider mite', 'redspider mite', 'mite'],
         'greenmiridbug': ['green mirid bug', 'mirid bug', 'mirid'],
-        'algalspot': ['algal leaf spot', 'tea algal leaf spot', 'algalspot'],
-        'healthy': ['fresh', 'normal'],
-
-
-        # MouloviBazar
+        'algalspot': ['algal leaf spot', 'tea algal leaf spot', 'algalspot', 'algal leaf'],
+        'healthy': ['fresh', 'normal', 'healthy'],
         'tealeafblight': ['tea leaf blight', 'leaf blight'],
         'tearedleafspot': ['tea red leaf spot', 'red leaf spot'],
         'tearedscab': ['tea red scab', 'red scab'],
+        'anthracnose': ['anthracnose'],
+        'birdseyespot': ['bird eye spot', 'bird\'s eyespot', 'birdseyespot'],
+        'redleafspot': ['red leaf spot', 'redleafspot'],
+        'whitespot': ['white spot', 'whitespot']
     }
 
     @staticmethod
